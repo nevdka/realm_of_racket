@@ -46,6 +46,8 @@
 
 
 
+
+
 (define snake-example
   (snake "up" (list (posn 1 1) (posn 1 2) (posn 1 3))))
 (define goo-example
