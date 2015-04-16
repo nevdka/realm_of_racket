@@ -2,7 +2,7 @@
 (require 2htdp/image 2htdp/universe)
 
 
-(struct pit (snake goos))
+(struct pit (snake goos super-goos))
 (struct snake (dir segs))
 (struct posn (x y))
 (struct goo (loc expire))
@@ -30,6 +30,7 @@
 ;; Visual constants
 (define MT-SCENE (empty-scene WIDTH-PX HEIGHT-PX))
 (define GOO-IMG (bitmap "graphics/goo.gif"))
+(define SUPER-GOO-IMG (bitmap "graphics/super_goo.gif"))
 (define SEG-IMG  (bitmap "graphics/body.gif"))
 (define HEAD-IMG (bitmap "graphics/head.gif"))
 
@@ -48,13 +49,6 @@
 
 
 
-(define snake-example
-  (snake "up" (list (posn 1 1) (posn 1 2) (posn 1 3))))
-(define goo-example
-  (list (goo (posn 1 0) 3) (goo (posn 5 8) 15)))
-(define pit-example
-  (pit snake-example goo-example))
-
 (define (start-snake)
   (big-bang (pit (snake "right" (list (posn 1 1)))
                  (list (fresh-goo)
@@ -62,6 +56,8 @@
                        (fresh-goo)
                        (fresh-goo)
                        (fresh-goo)
+                       (fresh-goo))
+                 (list (fresh-goo)
                        (fresh-goo)))
             (on-tick next-pit TICK-RATE)
             (on-key direct-snake)
@@ -71,10 +67,14 @@
 (define (next-pit w)
   (define snake (pit-snake w))
   (define goos (pit-goos w))
+  (define super-goos (pit-super-goos w))
   (define goo-to-eat (can-eat snake goos))
+  (define super-goo-to-eat (can-eat snake super-goos))
   (if goo-to-eat
-      (pit (grow snake) (age-goo (eat goos goo-to-eat)))
-      (pit (slither snake) (age-goo goos))))
+      (pit (grow snake) (age-goo (eat goos goo-to-eat)) (age-goo super-goos))
+      (if super-goo-to-eat
+           (pit (grow (grow snake)) (age-goo goos) (age-goo (eat super-goos super-goo-to-eat)))
+           (pit (slither snake) (age-goo goos) (age-goo super-goos)))))
 
 (define (can-eat snake goos)
   (cond [(empty? goos) #f]
@@ -150,7 +150,7 @@
               (cons? (rest (snake-segs the-snake))))
          (stop-with w)]
         [else
-         (pit (snake-change-dir the-snake d) (pit-goos w))]))
+         (pit (snake-change-dir the-snake d) (pit-goos w) (pit-super-goos w))]))
 
 (define (opposite-dir? d1 d2)
   (cond [(string=? d1 "up") (string=? d2 "down")]
@@ -160,7 +160,8 @@
 
 (define (render-pit w)
   (snake+scene (pit-snake w)
-               (goo-list+scene (pit-goos w) MT-SCENE)))
+               (goo-list+scene (pit-goos w)
+                               (super-goo-list+scene (pit-super-goos w) MT-SCENE))))
 
 (define (snake+scene snake scene)
   (define snake-body-scene
@@ -192,6 +193,13 @@
           [else (cons (goo-loc (first goos))
                       (get-posns-from-goo (rest goos)))]))
   (img-list+scene (get-posns-from-goo goos) GOO-IMG scene))
+
+(define (super-goo-list+scene goos scene)
+  (define (get-posns-from-goo goos)
+    (cond [(empty? goos) empty]
+          [else (cons (goo-loc (first goos))
+                      (get-posns-from-goo (rest goos)))]))
+  (img-list+scene (get-posns-from-goo goos) SUPER-GOO-IMG scene))
 
 (define (dead? w)
   (define snake (pit-snake w))
