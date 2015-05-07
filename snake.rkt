@@ -2,7 +2,7 @@
 (require 2htdp/image 2htdp/universe)
 
 
-(struct pit (snake goos super-goos))
+(struct pit (snake goos super-goos obstacles))
 (struct snake (dir segs))
 (struct posn (x y))
 (struct goo (loc expire))
@@ -31,6 +31,7 @@
 (define MT-SCENE (empty-scene WIDTH-PX HEIGHT-PX))
 (define GOO-IMG (bitmap "graphics/goo.gif"))
 (define SUPER-GOO-IMG (bitmap "graphics/super_goo.gif"))
+(define OBSTACLES-IMG (bitmap "graphics/obstacle.gif"))
 (define SEG-IMG  (bitmap "graphics/body.gif"))
 (define HEAD-IMG (bitmap "graphics/head.gif"))
 
@@ -51,13 +52,16 @@
 
 (define (start-snake)
   (big-bang (pit (snake "right" (list (posn 1 1)))
-                 (list (fresh-goo)
+                 (list (fresh-goo)  ;; normal goos
                        (fresh-goo)
                        (fresh-goo)
                        (fresh-goo)
                        (fresh-goo)
                        (fresh-goo))
-                 (list (fresh-goo)
+                 (list (fresh-goo)  ;; super goos
+                       (fresh-goo))
+                 (list (fresh-goo)  ;; obstacles
+                       (fresh-goo)
                        (fresh-goo)))
             (on-tick next-pit TICK-RATE)
             (on-key direct-snake)
@@ -67,14 +71,15 @@
 (define (next-pit w)
   (define snake (pit-snake w))
   (define goos (pit-goos w))
+  (define obstacles (pit-obstacles w))
   (define super-goos (pit-super-goos w))
   (define goo-to-eat (can-eat snake goos))
   (define super-goo-to-eat (can-eat snake super-goos))
   (if goo-to-eat
-      (pit (grow snake) (age-goo (eat goos goo-to-eat)) (age-goo super-goos))
+      (pit (grow snake) (age-goo (eat goos goo-to-eat)) (age-goo super-goos) (age-goo obstacles))
       (if super-goo-to-eat
-           (pit (grow (grow snake)) (age-goo goos) (age-goo (eat super-goos super-goo-to-eat)))
-           (pit (slither snake) (age-goo goos) (age-goo super-goos)))))
+          (pit (grow (grow snake)) (age-goo goos) (age-goo (eat super-goos super-goo-to-eat)) (age-goo obstacles))
+          (pit (slither snake) (age-goo goos) (age-goo super-goos) (age-goo obstacles)))))
 
 (define (can-eat snake goos)
   (cond [(empty? goos) #f]
@@ -150,7 +155,7 @@
               (cons? (rest (snake-segs the-snake))))
          (stop-with w)]
         [else
-         (pit (snake-change-dir the-snake d) (pit-goos w) (pit-super-goos w))]))
+         (pit (snake-change-dir the-snake d) (pit-goos w) (pit-super-goos w) (pit-obstacles w))]))
 
 (define (opposite-dir? d1 d2)
   (cond [(string=? d1 "up") (string=? d2 "down")]
@@ -161,7 +166,8 @@
 (define (render-pit w)
   (snake+scene (pit-snake w)
                (goo-list+scene (pit-goos w)
-                               (super-goo-list+scene (pit-super-goos w) MT-SCENE))))
+                               (super-goo-list+scene (pit-super-goos w)
+                                                     (obstacles-list+scene (pit-obstacles w) MT-SCENE)))))
 
 (define (snake+scene snake scene)
   (define snake-body-scene
@@ -201,9 +207,22 @@
                       (get-posns-from-goo (rest goos)))]))
   (img-list+scene (get-posns-from-goo goos) SUPER-GOO-IMG scene))
 
+(define (obstacles-list+scene goos scene)
+  (define (get-posns-from-goo goos)
+    (cond [(empty? goos) empty]
+          [else (cons (goo-loc (first goos))
+                      (get-posns-from-goo (rest goos)))]))
+  (img-list+scene (get-posns-from-goo goos) OBSTACLES-IMG scene))
+
+(define (obstacle-crash? obstacles)
+  (if obstacles true false))
+
 (define (dead? w)
   (define snake (pit-snake w))
-  (or (self-colliding? snake) (wall-colliding? snake)))
+  (define obstacles (can-eat snake (pit-obstacles w)))
+  (or (self-colliding? snake) (or
+                               (wall-colliding? snake) (obstacle-crash? obstacles))))
+
 
 (define (render-end w)
   (overlay (text "Game Over" ENDGAME-TEXT-SIZE "black")
